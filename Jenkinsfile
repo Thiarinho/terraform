@@ -14,6 +14,11 @@ pipeline {
             defaultValue: false,
             description: 'Automatically apply Terraform plan without manual approval?'
         )
+        booleanParam(
+            name: 'destroyInfra',
+            defaultValue: false,
+            description: 'Destroy infrastructure after apply?'
+        )
     }
 
     triggers {
@@ -50,7 +55,7 @@ pipeline {
 
         stage('Manual Approval') {
             when {
-                not { equals expected: true, actual: params.autoApprove }
+                expression { return !params.autoApprove }
             }
             steps {
                 script {
@@ -66,6 +71,18 @@ pipeline {
         stage('Terraform Apply') {
             steps {
                 sh 'terraform apply -input=false tfplan'
+            }
+        }
+
+        stage('Terraform Destroy') {
+            when {
+                expression { return params.destroyInfra }
+            }
+            steps {
+                script {
+                    input message: "⚠️ Confirm you want to destroy the deployed infrastructure?", ok: "Destroy"
+                    sh 'terraform destroy -auto-approve'
+                }
             }
         }
     }
