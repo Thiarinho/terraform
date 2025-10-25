@@ -1,111 +1,71 @@
+parameters {
+    booleanParam(name: 'APPLY_INFRA', defaultValue: false, description: 'Appliquer terraform apply ?')
+}
+
 pipeline {
     agent any
 
     environment {
-        AWS_ACCESS_KEY_ID     = credentials('AWS_ACCESS_KEY_ID')
-        AWS_SECRET_ACCESS_KEY = credentials('AWS_SECRET_ACCESS_KEY')
-        AWS_SESSION_TOKEN     = credentials('AWS_SESSION_TOKEN') // si credentials temporaires
-        AWS_DEFAULT_REGION    = "us-west-2"
-    }
-
-    parameters {
-        booleanParam(
-            name: 'autoApprove',
-            defaultValue: false,
-            description: 'Automatically apply Terraform plan without manual approval?'
-        )
-        booleanParam(
-            name: 'destroyInfra',
-            defaultValue: false,
-            description: 'Destroy infrastructure after apply?'
-        )
-    }
-
-    triggers {
-        githubPush()
+        PATH = "/usr/local/bin:$PATH"
+        AWS_DEFAULT_REGION = 'us-west-2'
     }
 
     stages {
-        stage('Checkout Code') {
+        stage('Checkout') {
             steps {
-                git branch: 'main', url: 'https://github.com/Thiarinho/terraform.git'
-            }
-        }
-
-        stage('Validate AWS Credentials') {
-            steps {
-                sh 'aws sts get-caller-identity'
-            }
-        }
-
-        stage('Terraform Init') {
-            steps {
-                sh 'terraform init'
+                checkout scmGit(
+                    branches: [[name: '*/main']],
+                    userRemoteConfigs: [[
+                        credentialsId: 'credential-git',
+                        url: 'https://github.com/Aminata11/jenkins-test.git'
+                    ]]
+                )
             }
         }
 
         stage('Terraform Plan') {
             steps {
-                sh '''
-                    terraform plan -out=tfplan
-                    terraform show -no-color tfplan > tfplan.txt
-                '''
-            }
-        }
-
-        stage('Manual Approval') {
-            when {
-                expression { return !params.autoApprove }
-            }
-            steps {
-                script {
-                    def planText = readFile 'tfplan.txt'
-                    input(
-                        message: "Do you want to apply the Terraform plan?",
-                        parameters: [text(name: 'Terraform Plan', defaultValue: planText)]
+                withCredentials([
+                    usernamePassword(
+                        credentialsId: 'aws-credentials',
+                        usernameVariable: 'AWS_ACCESS_KEY_ID',
+                        passwordVariable: 'AWS_SECRET_ACCESS_KEY'
+                    ),
+                    string(
+                        credentialsId: 'aws-session-token',
+                        variable: 'AWS_SESSION_TOKEN'
                     )
+                ]) {
+                    dir('terraform') {
+                        sh '''
+                            terraform init
+                            terraform plan -var-file=terraform.tfvars
+                        '''
+                    }
                 }
             }
         }
 
         stage('Terraform Apply') {
             steps {
-                sh 'terraform apply -input=false tfplan'
-            }
-        }
-
-        stage('Terraform Destroy') {
-            when {
-                expression { return params.destroyInfra }
-            }
-            steps {
-                script {
-                    input message: "⚠️ Confirm you want to destroy the deployed infrastructure?", ok: "Destroy"
-                    sh 'terraform destroy -auto-approve'
+                withCredentials([
+                    usernamePassword(
+                        credentialsId: 'aws-credentials',
+                        usernameVariable: 'AWS_ACCESS_KEY_ID',
+                        passwordVariable: 'AWS_SECRET_ACCESS_KEY'
+                    ),
+                    string(
+                        credentialsId: 'aws-session-token',
+                        variable: 'AWS_SESSION_TOKEN'
+                    )
+                ]) {
+                    dir('terraform') {
+                        sh '''
+                            terraform apply -auto-approve -var-file=terraform.tfvars
+                        '''
+                    }
                 }
             }
-        }
-    }
-
-    post {
-        success {
-            echo "✅ Pipeline terminé avec succès !"
-            emailext(
-                subject: "✅ SUCCESS: ${env.JOB_NAME} #${env.BUILD_NUMBER}",
-                body: """
-                    Build réussi pour ${env.JOB_NAME} #${env.BUILD_NUMBER}
-                    Détails : ${env.BUILD_URL}
-                    """,
-                to: "thiernomane932@gmail.com"
-            )
-        }
-        failure {
-            echo "❌ Échec du pipeline."
-            emailext(
-                subject: "❌ FAILED: ${env.JOB_NAME} #${env.BUILD_NUMBER}",
-                body: "Le pipeline a échoué \n\nDétails : ${env.BUILD_URL}",
-                to: "thiernomane932@gmail.com"
-            )
         }
     }
 }
