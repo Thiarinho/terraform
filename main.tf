@@ -1,71 +1,65 @@
+terraform {
+  required_providers {
+    aws = {
+      source  = "hashicorp/aws"
+      version = "6.17.0"
+    }
+  }
+}
+# 🔧 Provider AWS
 provider "aws" {
-  region = "us-west-2"
+  region = var.region  # Ex: "us-west-2"
 }
 
-# -----------------
-# # VPC
-# -----------------
-resource "aws_vpc" "my_vpc" {
-  cidr_block             = "10.0.0.0/16"
-  enable_dns_support     = true
-  enable_dns_hostnames   = true
+# 🌐 VPC
+resource "aws_vpc" "main" {
+  cidr_block = var.vpc_cidr  # Ex: "10.0.0.0/16"
   tags = {
-    Name = "TF-VPC"
+    Name = "FilRouge-VPC"
   }
 }
 
-# -----------------
-# # Subnet
-# -----------------
-resource "aws_subnet" "my_subnet" {
-  vpc_id                  = aws_vpc.my_vpc.id
-  cidr_block              = "10.0.1.0/24"
+# 🧩 Subnet public
+resource "aws_subnet" "public" {
+  vpc_id            = aws_vpc.main.id
+  cidr_block        = var.subnet_cidr  # Ex: "10.0.1.0/24"
   map_public_ip_on_launch = true
-  availability_zone       = "us-west-2a"
   tags = {
-    Name = "TF-Subnet"
+    Name = "FilRouge-Subnet"
   }
 }
 
-# -----------------
-# # Internet Gateway
-# -----------------
-resource "aws_internet_gateway" "my_igw" {
-  vpc_id = aws_vpc.my_vpc.id
+# 🌐 Internet Gateway
+resource "aws_internet_gateway" "gw" {
+  vpc_id = aws_vpc.main.id
   tags = {
-    Name = "TF-IGW"
+    Name = "FilRouge-Gateway"
   }
 }
 
-# -----------------
-# # Route Table
-# -----------------
-resource "aws_route_table" "my_route_table" {
-  vpc_id = aws_vpc.my_vpc.id
+# 📡 Table de routage
+resource "aws_route_table" "public" {
+  vpc_id = aws_vpc.main.id
   route {
     cidr_block = "0.0.0.0/0"
-    gateway_id = aws_internet_gateway.my_igw.id
+    gateway_id = aws_internet_gateway.gw.id
   }
   tags = {
-    Name = "TF-RouteTable"
+    Name = "FilRouge-RouteTable"
   }
 }
 
-# -----------------
-# # Association Subnet -> Route Table
-# -----------------
-resource "aws_route_table_association" "a" {
-  subnet_id      = aws_subnet.my_subnet.id
-  route_table_id = aws_route_table.my_route_table.id
+# 🔗 Association du subnet à la table de routage
+resource "aws_route_table_association" "public_assoc" {
+  subnet_id      = aws_subnet.public.id
+  route_table_id = aws_route_table.public.id
 }
 
-# -----------------
-# # Security Group
-# -----------------
-resource "aws_security_group" "my_sg" {
-  name        = "tf-security-group"
-  description = "Allow SSH and HTTP"
-  vpc_id      = aws_vpc.my_vpc.id
+# 🔐 Groupe de sécurité
+resource "aws_security_group" "web_sg" {
+  name        = "FilRouge-SG"
+  description = "Autorise SSH et HTTP"
+  vpc_id      = aws_vpc.main.id
 
   ingress {
     description = "SSH"
@@ -83,7 +77,6 @@ resource "aws_security_group" "my_sg" {
     cidr_blocks = ["0.0.0.0/0"]
   }
 
-  # Allow all outbound traffic
   egress {
     from_port   = 0
     to_port     = 0
@@ -92,21 +85,36 @@ resource "aws_security_group" "my_sg" {
   }
 
   tags = {
-    Name = "TF-SG"
+    Name = "FilRouge-SG"
   }
 }
 
-# -----------------
-# # EC2 Instance
-# -----------------
-resource "aws_instance" "foo" {
-  ami                         = "ami-0e1d35993cb249cee" # Example AMI ID (Note: this is an example and might not be valid/available)
-  instance_type               = "t2.micro"
-  subnet_id                   = aws_subnet.my_subnet.id
-  vpc_security_group_ids      = [aws_security_group.my_sg.id]
+# 💻 EC2 avec rôle LabInstanceProfile
+resource "aws_instance" "web" {
+  ami                    = var.ami_id         # Ex: Amazon Linux 2
+  instance_type          = var.instance_type  # Ex: "t3.micro"
+  subnet_id              = aws_subnet.public.id
+  vpc_security_group_ids = [aws_security_group.web_sg.id]
   associate_public_ip_address = true
 
+  iam_instance_profile   = "LabInstanceProfile"  # Respecte les restrictions du sandbox
+
   tags = {
-    Name = "TF-Instance"
+    Name = "FilRouge-EC2"
+  }
+}
+
+# 🗄️ Base de données RDS (si ton app en a besoin)
+resource "aws_db_instance" "db" {
+  allocated_storage    = 20
+  engine               = "mysql"
+  instance_class       = "db.t3.micro"
+  username             = var.db_user
+  password             = var.db_pass
+  skip_final_snapshot  = true
+  publicly_accessible  = true
+
+  tags = {
+    Name = "FilRouge-DB"
   }
 }
