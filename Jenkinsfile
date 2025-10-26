@@ -25,17 +25,7 @@ pipeline {
 
         stage('Terraform Plan') {
             steps {
-                withCredentials([
-                    usernamePassword(
-                        credentialsId: 'aws-credentials',
-                        usernameVariable: 'AWS_ACCESS_KEY_ID',
-                        passwordVariable: 'AWS_SECRET_ACCESS_KEY'
-                    ),
-                    string(
-                        credentialsId: 'aws-session-token',
-                        variable: 'AWS_SESSION_TOKEN'
-                    )
-                ]) {
+                withCredentials([[$class: 'AmazonWebServicesCredentialsBinding', credentialsId: 'aws-credentials']]) {
                     dir('terraform') {
                         sh '''
                             terraform init
@@ -47,18 +37,11 @@ pipeline {
         }
 
         stage('Terraform Apply') {
+            when {
+                expression { params.APPLY_INFRA == true }
+            }
             steps {
-                withCredentials([
-                    usernamePassword(
-                        credentialsId: 'aws-credentials',
-                        usernameVariable: 'AWS_ACCESS_KEY_ID',
-                        passwordVariable: 'AWS_SECRET_ACCESS_KEY'
-                    ),
-                    string(
-                        credentialsId: 'aws-session-token',
-                        variable: 'AWS_SESSION_TOKEN'
-                    )
-                ]) {
+                withCredentials([[$class: 'AmazonWebServicesCredentialsBinding', credentialsId: 'aws-credentials']]) {
                     dir('terraform') {
                         sh '''
                             terraform apply -auto-approve -var-file=terraform.tfvars
