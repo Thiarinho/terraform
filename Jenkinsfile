@@ -23,7 +23,7 @@ pipeline {
     stages {
         stage('Checkout Code') {
             steps {
-                git branch: 'main', url: 'https://github.com/omarlouis1/terraform.git'
+                git branch: 'main', url: 'https://github.com/Thiarinho/terraform.git'
             }
         }
 
@@ -79,7 +79,7 @@ pipeline {
                 ✅ Build réussi pour ${env.JOB_NAME} #${env.BUILD_NUMBER}
                 🔗 Détails: ${env.BUILD_URL}
                 """,
-                to: "omzokao99@gmail.com"
+                to: "thiernomane932@gmail.com"
             )
         }
         failure {
@@ -87,7 +87,7 @@ pipeline {
             emailext(
                 subject: "❌ FAILED: ${env.JOB_NAME} #${env.BUILD_NUMBER}",
                 body: "Le pipeline a échoué 💥\n\nDétails : ${env.BUILD_URL}",
-                to: "omzokao99@gmail.com"
+                to: "thiernomane932@gmail.com"
             )
         }
     }
