@@ -61,16 +61,26 @@ pipeline {
             }
         }
 
-       
-
-
         stage('Terraform Apply') {
             steps {
                 sh 'terraform apply -input=false tfplan'
             }
         }
+
+        // 🔥 Étape ajoutée : détruire les ressources après test
+        stage('Terraform Destroy') {
+            steps {
+                script {
+                    echo "🧨 Suppression automatique des ressources après déploiement..."
+                    sh '''
+                        terraform destroy -auto-approve
+                    '''
+                }
+            }
+        }
     }
-      post {
+
+    post {
         success {
             echo "✅ Pipeline terminé avec succès !"
             emailext(
